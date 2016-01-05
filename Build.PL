@@ -1,26 +1,20 @@
 use 5.8.4;
 use strict;
 use warnings;
-use Module::Build;
+use Alien::Base::ModuleBuild;
 
-my $builder = Module::Build->new(
-    module_name         => 'Alien::Libssh2',
-    license             => 'artistic_2',
-    dist_author         => q{Salvador Fandiño <sfandino@yahoo.com>},
-    dist_version_from   => 'lib/Alien/Libssh2.pm',
-    release_status      => 'stable',
-    configure_requires => {
-        'Module::Build' => 0,
-    },
-    build_requires => {
-        'Test::More' => 0,
-    },
-    requires => {
-        #'ABC'              => 1.6,
-        #'Foo::Bar::Module' => 5.0401,
-    },
-    add_to_cleanup     => [ 'Alien-Libssh2-*' ],
-    create_makefile_pl => 'traditional',
-);
+my $builder = Alien::Base::ModuleBuild
+  ->new( module_name        => 'Alien::Libssh2',
+         license            => 'perl',
+         dist_author        => q{Salvador Fandiño <sfandino@yahoo.com>},
+         configure_requires => { 'Module::Build' => 0,
+                                 'Alien::OpenSSL' => '0.07' },
+         alien_name         => 'libssh2',
+         alien_repository   => { protocol => 'http',
+                                 host => 'github.com',
+                                 location => '/libssh2/libssh2/releases/',
+                                 pattern => qr/\/libssh2-(1\.\d+\.\d+)\.tar\.gz$/ },
+         alien_msys         => 1,
+       );
 
 $builder->create_build_script();
