@@ -6,6 +6,8 @@ use 5.8.4;
 use strict;
 use warnings;
 
+use parent q(Alien::Base);
+
 1;
 
 =head1 NAME
