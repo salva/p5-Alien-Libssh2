@@ -47,22 +47,6 @@ sub use_installed_version {
     $self->alien_check_installed_version
 }
 
-sub requires {
-  my $self = shift;
-  my %r;
-  unless ($self->use_installed_version) {
-    if ($self->use_gcrypt) {
-      $r{'Alien::Libgcrypt'} = '0';
-    }
-    else {
-      $r{'Alien::OpenSSL'} = '0.07';
-    }
-  }
-  \%r;
-}
-
-*build_requires = \&requires;
-
 sub alien_build_commands {
   my $self = shift;
   if ($self->{action} and $self->{action} eq 'Build_PL') {
@@ -98,25 +82,31 @@ sub alien_build_commands {
   return [ $config_cmd, "make" ]
 }
 
-sub new {
-  my $class = shift;
-  my $self = $class->SUPER::new(@_);
+sub auto_require {
+  my $self = shift;
+  $self->SUPER::auto_require(@_);
+
   if ($self->use_installed_version) {
     my $system_use_gcrypt = $self->check_installed_use_gcrypt;
     if (defined (my $use_gcrypt = $self->use_gcrypt)) {
-      if ($system_use_gcrypt != $use_gcrypt) {
-        croak "use_gcrypt=$use_gcrypt doesn't match the system library configuration found";
-      }
+      croak "use_gcrypt=$use_gcrypt doesn't match the system library configuration found"
+        unless !$system_use_gcrypt == !$use_gcrypt;
     }
     else {
-      $self->config_data('use_gcrypt', $system_use_gcrypt);
+      $self->use_gcrypt($system_use_gcrypt);
     }
   }
   else {
-    $self->alien_bin_requires($self->requires);
+    my ($lib, $ver) = ($self->use_gcrypt
+                       ? ('Alien::Libgcrypt' => '0')
+                       : ('Alien::OpenSSL'   => '0') );
+    $self->_add_prereq(requires => $lib, $ver);
+    $self->alien_bin_requires({ $lib => $ver });
   }
 
-  $self;
+  $self->config_data('use_gcrypt', $self->use_gcrypt || 0);
+
+  ()
 }
 
 EOC
