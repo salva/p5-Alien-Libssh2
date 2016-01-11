@@ -15,4 +15,4 @@ env:
 install:
   - cpanm --notest Alien::Base~0.024 Alien::Libgpg_error Alien::Libgcrypt Alien::OpenSSL
 script:
-  - perl Build.PL use_gcrypt $USE_GCRYPT && ./Build manifest && perl Build.PL $USE_GCRYPT && ./Build && ./Build test
+  - perl Build.PL $USE_GCRYPT && ./Build manifest && perl Build.PL $USE_GCRYPT && ./Build && ./Build test
