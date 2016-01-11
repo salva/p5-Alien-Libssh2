@@ -112,6 +112,10 @@ sub new {
       $self->config_data('use_gcrypt', $system_use_gcrypt);
     }
   }
+  else {
+    $self->alien_bin_requires($self->requires);
+  }
+
   $self;
 }
 
