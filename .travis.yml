@@ -1,0 +1,18 @@
+language: perl
+perl:
+  - "5.22"
+  - "5.20"
+  - "5.18"
+  - "5.16"
+  - "5.14"
+  - "5.12"
+  - "5.10"
+  - "5.8"
+env:
+  - ALIEN_FORCE=1 USE_GCRYPT="use_gcrypt=1"
+  - ALIEN_FORCE=1 USE_GCRYPT="use_gcrypt=0"
+  - NO_ALIEN_FORCE=1 USE_GCRYPT=""
+install:
+  - cpanm --notest Alien::Base~0.024 Alien::Libgpg_error Alien::Libgcrypt Alien::OpenSSL
+script:
+  - perl Build.PL use_gcrypt $USE_GCRYPT && ./Build manifest && perl Build.PL $USE_GCRYPT && ./Build && ./Build test
