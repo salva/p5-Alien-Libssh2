@@ -1,4 +1,4 @@
-#!perl -T
+#!perl
 use 5.8.4;
 use strict;
 use warnings;
