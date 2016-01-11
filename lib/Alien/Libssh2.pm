@@ -6,7 +6,13 @@ use 5.8.4;
 use strict;
 use warnings;
 
-use parent q(Alien::Base);
+use base q(Alien::Base);
+
+my @alien_libs = __PACKAGE__->config('alien_libs');
+for my $lib (@alien_libs) {
+    eval "require $lib; 1" or die;
+    $lib->import;
+}
 
 1;
 
