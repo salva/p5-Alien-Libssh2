@@ -61,8 +61,8 @@ sub alien_build_commands {
 
   my ($with_key, $with_prefix_key, $module) =
     ( $self->use_gcrypt
-      ? qw(gcrypt  libgcrypt OpenSSL)
-      : qw(openssl libssl    Libgcrypt) );
+      ? qw(gcrypt  libgcrypt Libgcrypt)
+      : qw(openssl libssl    OpenSSL  ) );
 
   $config_cmd .= " --with-${with_key}";
 
