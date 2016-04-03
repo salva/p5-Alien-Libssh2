@@ -58,7 +58,7 @@ sub alien_build_commands {
     return ["echo '*** to be filled later ***'", "exit 1"]
   }
 
-  my $config_cmd = "%pconfigure --prefix=%s";
+  my $config_cmd = "%pconfigure --prefix=%s --disable-examples-build";
   $config_cmd = "sh ./$config_cmd"
     if $^O eq 'MSWin32';
 
