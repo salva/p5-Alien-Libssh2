@@ -10,8 +10,9 @@ use strict;
 use warnings;
 use Carp;
 
+__PACKAGE__->add_property('crypto_backend');
 __PACKAGE__->add_property('use_gcrypt');
-__PACKAGE__->add_property('gcrypt_check_command' => '%{pkg_config} --libs-only-l --static %n');
+__PACKAGE__->add_property('crypto_backend_check_command' => '%{pkg_config} --libs-only-l --static %n');
 
 
 sub alien_check_installed_version {
@@ -26,15 +27,19 @@ sub alien_check_installed_version {
   $version;
 }
 
-sub check_installed_use_gcrypt {
+sub check_installed_crypto_backend {
   my $self = shift;
-  my $gcrypt = $self->config_data('system_library_use_gcrypt');
-  unless (defined $gcrypt) {
-    my %result = $self->do_system($self->gcrypt_check_command, { verbose => 0 });
-    $gcrypt = ( $result{stdout} =~ /gcrypt/ );
-    $self->config_data('system_library_use_gcrypt', $gcrypt);
+  my $cbe = $self->config_data('system_library_crypto_backend');
+  unless (defined $cbe) {
+    my %result = $self->do_system($self->crypto_backend_check_command, { verbose => 0 });
+    if    ( $result{stdout} =~ /gcrypt/i ) { $cbe = 'gcrypt'  }
+    elsif ( $result{stdout} =~ /ssl/i )    { $cbe = 'openssl' }
+    elsif ( $^O eq 'MSWin32' )             { $cbe = 'wincng'  }
+    else { croak "unable to detect crypto backend used by system library" }
+
+    $self->config_data('system_library_crypto_backend', $cbe);
   }
-  $gcrypt;
+  $cbe;
 }
 
 sub use_installed_version {
@@ -54,58 +59,82 @@ sub alien_build_commands {
   }
 
   my $config_cmd = "%pconfigure --prefix=%s";
+  $config_cmd = "sh ./$config_cmd"
+    if $^O eq 'MSWin32';
 
-  if ($^O eq 'MSWin32') {
-    $config_cmd = "sh $config_cmd";
+  my $cbe = $self->crypto_backend;
+
+  $self->log_verbose("CBE: ".($cbe//'<undef>')."\n");
+
+  unless (defined $cbe) {
+    $cbe = (($^O eq 'MSWin32') ? 'wincng' : 'gcrypt');
+    $self->crypto_backend($cbe)
   }
 
-  my ($with_key, $with_prefix_key, $module) =
-    ( $self->use_gcrypt
-      ? qw(gcrypt  libgcrypt Libgcrypt)
-      : qw(openssl libssl    OpenSSL  ) );
+  my ($with_prefix_key, $module) =
+    ( $cbe eq 'gcrypt'  ? qw(libgcrypt Libgcrypt) :
+      $cbe eq 'openssl' ? qw(libssl    OpenSSL  ) :
+      $cbe eq 'wincng'  ? ()                      :
+      die "unkwnon crypto backend '$cbe'" );
 
-  $config_cmd .= " --with-${with_key}";
+  $config_cmd .= " --with-$cbe";
 
-  my $ac = "Alien::$module";
-  eval "require $ac; 1" or die;
-  my $ao = $ac->new;
-  if ($ao->config('install_type') ne 'system') {
-    if (defined (my $ao_dist_dir = $ao->dist_dir)) {
-      if ($^O eq 'MSWin32') {
-        $ao_dist_dir =~ s{\\}{/}g;
-        $ao_dist_dir =~ s{^([a-z]):/}{/$1/}i;
+  if (defined $module) {
+    my $ac = "Alien::$module";
+    eval "require $ac; 1" or die;
+    my $ao = $ac->new;
+    if ($ao->config('install_type') ne 'system') {
+      if (defined (my $ao_dist_dir = $ao->dist_dir)) {
+        if ($^O eq 'MSWin32') {
+          $ao_dist_dir =~ s{\\}{/}g;
+          $ao_dist_dir =~ s{^([a-z]):/}{/$1/}i;
+        }
+        $config_cmd .= " --with-${with_prefix_key}-prefix=$ao_dist_dir";
       }
-      $config_cmd .= " --with-${with_prefix_key}-prefix=$ao_dist_dir";
     }
   }
-
   return [ $config_cmd, "make" ]
 }
+
+my %crypto_backend_module = ( wincng  => undef,
+                             gcrypt  => 'Libgcrypt',
+                             openssl => 'OpenSSL' );
 
 sub auto_require {
   my $self = shift;
   $self->SUPER::auto_require(@_);
-
+  my $cbe = $self->crypto_backend;
   if ($self->use_installed_version) {
-    my $system_use_gcrypt = $self->check_installed_use_gcrypt;
-    if (defined (my $use_gcrypt = $self->use_gcrypt)) {
-      croak "use_gcrypt=$use_gcrypt doesn't match the system library configuration found"
-        unless !$system_use_gcrypt == !$use_gcrypt;
+    my $installed_cbe = $self->check_installed_crypto_backend;
+    if (defined $cbe) {
+      $installed_cbe eq $cbe or
+        croak "user selected crypto backend ($cbe) doesn't match the one for the system installed libssh2 ($installed_cbe)";
     }
     else {
-      $self->use_gcrypt($system_use_gcrypt);
+      $cbe = $installed_cbe;
     }
+    $self->log_verbose("Crypto backend for the system libssh2 is $installed_cbe\n");
   }
   else {
-    my ($lib, $ver) = ($self->use_gcrypt
-                       ? ('Alien::Libgcrypt' => '0')
-                       : ('Alien::OpenSSL'   => '0') );
-    $self->_add_prereq(requires => $lib, $ver);
-    $self->alien_bin_requires({ $lib => $ver });
+    $cbe //= (($^O eq 'MSWin32') ? 'wincng' : 'gcrypt');
+    $self->log_verbose("Crypto backend picked is $cbe\n");
+
+    $cbe eq 'wincng' and $^O ne 'MSWin32'
+      and croak "Crypto backend wincng only supported in MS Windows";
+
+    my $cbe_module = $crypto_backend_module{$cbe};
+    if (defined $cbe_module) {
+      $self->_add_prereq(requires => "Alien::$cbe_module", 0);
+      $self->alien_bin_requires({ "Alien::cbe_module" => 0 });
+    }
+    else {
+      exists $crypto_backend_module{$cbe}
+        or croak "unsupported crypto backend $cbe";
+    }
   }
 
-  $self->config_data('use_gcrypt', $self->use_gcrypt || 0);
-
+  $self->crypto_backend($cbe);
+  $self->config_data(crypto_backend => $cbe);
   ()
 }
 
@@ -117,10 +146,14 @@ my $builder = $class
          dist_author        => q{Salvador Fandiño <sfandino@yahoo.com>},
          configure_requires => { 'Alien::Base' => '0.24' },
          alien_name         => 'libssh2',
-         alien_repository   => { protocol => 'http',
-                                 host => 'github.com',
-                                 location => '/libssh2/libssh2/releases/',
-                                 pattern => qr/\/libssh2-(1\.\d+\.\d+)\.tar\.gz$/ },
+         # alien_repository   => { protocol => 'http',
+         #                         host => 'github.com',
+         #                         location => '/libssh2/libssh2/releases/',
+         #                         pattern => qr/\/libssh2-(1\.\d+\.\d+)\.tar\.gz$/ },
+         alien_repository   => { protocol => 'https',
+                                 host => 'libssh2.org',
+                                 location => '/download/',
+                                 pattern => qr/^libssh2-(1\.\d+\.\d+)\.tar\.gz$/ },
          alien_msys         => 1,
          meta_merge         => { resources => { homepage => 'https://github.com/salva/p5-Alien-Libssh2',
 			                        bugtracker => 'https://github.com/salva/p5-Alien-Libssh2/issues',
