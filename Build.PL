@@ -97,8 +97,8 @@ sub alien_build_commands {
 }
 
 my %crypto_backend_module = ( wincng  => undef,
-                             gcrypt  => 'Libgcrypt',
-                             openssl => 'OpenSSL' );
+                              gcrypt  => 'Libgcrypt',
+                              openssl => 'OpenSSL' );
 
 sub auto_require {
   my $self = shift;

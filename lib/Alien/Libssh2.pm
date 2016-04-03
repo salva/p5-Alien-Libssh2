@@ -9,7 +9,7 @@ use warnings;
 use base q(Alien::Base);
 
 my @alien_libs = __PACKAGE__->config('alien_libs');
-for my $lib (@alien_libs) {
+for my $lib (grep defined, @alien_libs) {
     eval "require $lib; 1" or die;
     $lib->import;
 }
